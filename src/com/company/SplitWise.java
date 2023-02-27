@@ -99,7 +99,6 @@ class Expense {
             group.member_map.get(paidId).receive_amt += share_amt;
             System.out.printf("\nSettled Rs.%.2f to %s !!",(-share_amt),paidBy.name);
         }else System.out.println("Nothing to Settle !!");
-
     }
 
     void displayDetails(User user){
@@ -112,11 +111,10 @@ class Expense {
             System.out.printf("%s : Rs. %.2f\n",member.name,share_map.get(memberID));
         }
 
-        System.out.println("\n1. Settle\n2. Go Back\n\nChoose an Option : ");
+        System.out.println("\n1. Settle\n2. Remove Expense\n3. Go Back\n\nChoose an Option : ");
         int op = new Scanner(System.in).nextInt();
-        if(op==1){
-            settleAmount(user);
-        }
+        if(op==1) settleAmount(user);
+        else if(op==2) group.removeExpense(expenseName,user, paidBy);
     }
 }
 
@@ -226,6 +224,15 @@ class Group {
             Expense expense = new Expense(expenseName, amount, paidBy, this);
             expense_map.put(expense.expenseName, expense);
         }
+    }
+
+    public void removeExpense(String expenseName,User user, User paidBy) {
+        if(user.equals(paidBy)){
+            expense_map.remove(expenseName);
+            System.out.printf("\n'%s' removed successfully !!\n",expenseName);
+        }else System.out.printf("\nOnly %s can remove the Expense !!\n",paidBy.name);
+
+
     }
 }
 
