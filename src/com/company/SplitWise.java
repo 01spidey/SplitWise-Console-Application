@@ -62,23 +62,25 @@ class Expense {
     ArrayList<String> members;
 
 
-    Expense(String name, double amount, User paidBy, Group group) {
+    Expense(String name, double amount, User paidBy, Group group, List<String> share_lst){
         expenseName = name;
         this.amount = amount;
         this.paidBy = paidBy;
         this.group = group;
         date = LocalDate.now();
-        members = new ArrayList<>(group.member_map.keySet());
-        share_expense();
-
+        share_expense(share_lst);
     }
 
-    void share_expense(){
-        double share_amt = amount/members.size();
-        for(String  memberID:members){
-            if(!(memberID.equals(paidBy.name+"/"+paidBy.mail))) {
-                share_map.put(memberID, -share_amt);
-                group.member_map.get(memberID).settle_amt+=share_amt;
+    void share_expense(List<String> share_lst){
+        double share_amt = amount/(share_lst.size()+1);
+        members = new ArrayList<>(group.member_map.keySet());
+
+        for(String memberID:members){
+            if(!(memberID.equals(paidBy.name))) {
+                if(share_lst.contains(memberID)) {
+                    share_map.put(memberID, -share_amt);
+                    group.member_map.get(memberID).settle_amt += share_amt;
+                }else share_map.put(memberID, 0.0);
             }
             else {
                 share_map.put(memberID, amount-share_amt);
@@ -88,8 +90,8 @@ class Expense {
     }
 
     void settleAmount(User user){
-        String memberID = user.name+"/"+user.mail;
-        String paidId = paidBy.name+"/"+paidBy.mail;
+        String memberID = user.name;
+        String paidId = paidBy.name;
         double share_amt = share_map.get(memberID);
 
         if(share_amt<0) {
@@ -106,6 +108,7 @@ class Expense {
         System.out.println("Expense Name : "+expenseName+"\nAmount : Rs."+amount+"\nPaid By : "+paidBy.name+"\nDate : "+(date.toString()));
         System.out.println("\nExpense Share Details :");
         User member;
+        members = new ArrayList<>(group.member_map.keySet());
         for(String memberID:members){
             member = group.member_map.get(memberID);
             System.out.printf("%s : Rs. %.2f\n",member.name,share_map.get(memberID));
@@ -133,11 +136,11 @@ class Group {
     }
 
     void addMember(User user, boolean flag) {
-        String key = user.name + "/" + user.mail;
+        String key = user.name;
         if (member_map.containsKey(key)) System.out.println("\nUser already exists in the group !!");
         else {
             user.group_map.put(groupID, this);
-            member_map.put((user.name + "/" + user.mail), user);
+            member_map.put(user.name, user);
             if (flag) System.out.println(user.name + " added Successfully!!");
         }
     }
@@ -155,13 +158,29 @@ class Group {
             System.out.print("\n1. Add Expense\n2. View Expenses\n3. View Members\n4. Add Member\n5. Leave Group\n6. Go Back\n\nChoose an option : ");
             int op = scn.nextInt();
             if (op == 1) {
+                List<String> share_lst = new ArrayList<>();
                 scn.nextLine();
                 System.out.println("\n---------- Add Expense ----------");
                 System.out.print("Expense Name : ");
                 String expenseName = scn.nextLine();
                 System.out.print("Expense Amount : ");
                 double amount = scn.nextDouble();
-                addExpense(expenseName, amount, user);
+                boolean flag = true;
+                viewMembers();
+                String ch = "";
+                String username = "";
+                while(flag){
+                    System.out.print("\nAdd a member for share [y/n] : ");
+                    ch = scn.next();
+                    scn.nextLine();
+                    if(ch.equals("y")){
+                        System.out.print("Enter Username : ");
+                        username = scn.nextLine();
+                        if(member_map.containsKey(username)) share_lst.add(username);
+                        else System.out.println("\nUser not found in the Group !!");
+                    }else flag = false;
+                }
+                addExpense(expenseName, amount, user, share_lst);
 
             }
             else if(op==2){
@@ -193,14 +212,11 @@ class Group {
                 scn.nextLine();
                 System.out.print("Name : ");
                 String name = scn.nextLine();
-                System.out.print("Email : ");
-                String mail = scn.next();
-                String memberID = name+"/"+mail;
-                if (SplitWise.user_map.containsKey(memberID)){
-                    User member = SplitWise.user_map.get(memberID);
-                    if(member_map.containsKey(memberID)) System.out.println("\nUser already added in the Group !!");
+                if (SplitWise.user_map.containsKey(name)){
+                    User member = SplitWise.user_map.get(name);
+                    if(member_map.containsKey(name)) System.out.println("\nUser already added in the Group !!");
                     else {
-                        member_map.put(memberID, member);
+                        member_map.put(name, member);
                         addMember(member,true);
                     }
                 }
@@ -218,10 +234,10 @@ class Group {
         }
     }
 
-    void addExpense(String expenseName, double amount, User paidBy) {
+    void addExpense(String expenseName, double amount, User paidBy, List<String> share_lst) {
         if (expense_map.containsKey(expenseName)) System.out.println("\nExpense Name already Exists !!");
         else {
-            Expense expense = new Expense(expenseName, amount, paidBy, this);
+            Expense expense = new Expense(expenseName, amount, paidBy, this, share_lst);
             expense_map.put(expense.expenseName, expense);
         }
     }
@@ -242,20 +258,28 @@ public class SplitWise {
     static HashMap<String, User> user_map = new HashMap<>();
     static HashMap<String, Group> group_map = new HashMap<>();
 
+    static boolean validate(String name, String mail){
+        return name.matches("^(?=.*[a-zA-Z])[a-zA-Z0-9]+$") &&
+                mail.matches("^[_A-Za-z0-9-\\+]+(\\.[_A-Za-z0-9-]+)*@[A-Za-z0-9-]+(\\.[A-Za-z0-9]+)*(\\.[A-Za-z]{2,})$");
+    }
+
     static String userSignUp() {
         System.out.println("\n---------- User SignUp ----------");
-        System.out.print("Name : ");
+        System.out.print("Name [at least 3 characters]: ");
         String name = scn.nextLine();
         System.out.print("Email : ");
         String mail = scn.next();
-        if (user_map.containsKey(name + "/" + mail)) {
-            System.out.println("\nUser Already Exists !!");
-            return "null";
-        }
+        if(validate(name, mail)) {
+            if (user_map.containsKey(name)) {
+                System.out.println("\nUsername Already Taken !!");
+                return "null";
+            }
 
-        user_map.put((name + "/" + mail), new User(name, mail));
-        System.out.println("\nRegistration Success !!\nWelcome, " + name);
-        return name + "/" + mail;
+            user_map.put(name, new User(name, mail));
+            System.out.println("\nRegistration Success !!\nWelcome, " + name);
+            return name;
+        }else System.out.println("Username or Email Invalid !!");
+        return "null";
     }
 
     static String askFirst() {
@@ -269,9 +293,9 @@ public class SplitWise {
             String name = scn.nextLine();
             System.out.print("Email : ");
             String mail = scn.next();
-            if (user_map.containsKey(name + "/" + mail)) {
-                System.out.println("\nWelcome, " + user_map.get(name + "/" + mail).name + " !!");
-                return (name + "/" + mail);
+            if (user_map.containsKey(name)) {
+                System.out.println("\nWelcome, " + user_map.get(name).name + " !!");
+                return name;
             } else {
                 System.out.println("\nInvalid Credentials!!");
                 return askFirst();
@@ -324,10 +348,8 @@ public class SplitWise {
                                     System.out.println("\nMember " + (i + 1));
                                     System.out.print("Name : ");
                                     name = scn.nextLine();
-                                    System.out.print("Email : ");
-                                    mail = scn.next();
-                                    if (user_map.containsKey(name + "/" + mail))
-                                        members.add(user_map.get(name + "/" + mail));
+                                    if (user_map.containsKey(name))
+                                        members.add(user_map.get(name));
                                     else {
                                         i--;
                                         System.out.println("User does not exist !!");
