@@ -7,7 +7,7 @@ class User {
     String name;
     String mail;
     HashMap<String, Group> group_map = new HashMap<>();
-    double settle_amt, receive_amt;
+
 
     User(String name, String mail) {
         this.name = name;
@@ -74,17 +74,15 @@ class Expense {
     void share_expense(List<String> share_lst){
         double share_amt = amount/(share_lst.size()+1);
         members = new ArrayList<>(group.member_map.keySet());
-
         for(String memberID:members){
             if(!(memberID.equals(paidBy.name))) {
                 if(share_lst.contains(memberID)) {
+                    group.addPayment(group.member_map.get(memberID), paidBy, share_amt);
                     share_map.put(memberID, -share_amt);
-                    group.member_map.get(memberID).settle_amt += share_amt;
                 }else share_map.put(memberID, 0.0);
             }
             else {
                 share_map.put(memberID, amount-share_amt);
-                group.member_map.get(memberID).receive_amt+=(amount - share_amt);
             }
         }
     }
@@ -97,8 +95,6 @@ class Expense {
         if(share_amt<0) {
             share_map.put(paidId, share_map.get(paidId) + share_amt);
             share_map.put(memberID, 0.0);
-            group.member_map.get(memberID).settle_amt += share_amt;
-            group.member_map.get(paidId).receive_amt += share_amt;
             System.out.printf("\nSettled Rs.%.2f to %s !!",(-share_amt),paidBy.name);
         }else System.out.println("Nothing to Settle !!");
     }
@@ -113,11 +109,26 @@ class Expense {
             member = group.member_map.get(memberID);
             System.out.printf("%s : Rs. %.2f\n",member.name,share_map.get(memberID));
         }
+        System.out.println("\n1. Remove Expense\n2. Go Back\n\nChoose an Option : ");
+        int ch = new Scanner(System.in).nextInt();
+        if(ch==1) {
+            group.expense_map.remove(expenseName);
+            System.out.println("\nExpense Removed !!");
+        }
+    }
+}
 
-        System.out.println("\n1. Settle\n2. Remove Expense\n3. Go Back\n\nChoose an Option : ");
-        int op = new Scanner(System.in).nextInt();
-        if(op==1) settleAmount(user);
-        else if(op==2) group.removeExpense(expenseName,user, paidBy);
+class Payment{
+    User from;
+    User to;
+    String id;
+    double amt;
+
+    Payment(User from, User to, double amt){
+        this.from = from;
+        this.to = to;
+        id = from.name+"-"+to.name;
+        this.amt = amt;
     }
 }
 
@@ -128,11 +139,34 @@ class Group {
     String groupDesc;
     String groupID;
     Scanner scn = new Scanner(System.in);
+    HashMap<String, Payment> payment_map = new HashMap<>();
 
-    Group(String name, String desc, String groupID) {
+    Group(String name, String desc, String id) {
         groupName = name;
         groupDesc = desc;
-        this.groupID = groupID;
+        groupID = id;
+    }
+
+    void addPayment(User from, User to, double amount){
+        Payment tom_ben_payment = new Payment(from, to, amount);
+        String tom_ben_id = from.name + "-" + to.name;
+        String ben_tom_id = to.name + "-" + from.name;
+
+        if(payment_map.containsKey(ben_tom_id)){
+            
+            Payment ben_tom_payment = payment_map.get(ben_tom_id);
+            
+            if (ben_tom_payment.amt > tom_ben_payment.amt) {
+                ben_tom_payment.amt -= tom_ben_payment.amt;
+                tom_ben_payment.amt = 0;
+            } else {
+                tom_ben_payment.amt -= ben_tom_payment.amt;
+                ben_tom_payment.amt = 0;
+            }
+        }
+
+        if(payment_map.containsKey(tom_ben_id)) payment_map.get(tom_ben_id).amt+=tom_ben_payment.amt;
+        else payment_map.put(tom_ben_id, tom_ben_payment);
     }
 
     void addMember(User user, boolean flag) {
@@ -155,7 +189,7 @@ class Group {
     void viewGroup(User user) {
         System.out.println("\n---------- " + groupName + " ----------\nGroup ID : "+(groupID.split("/")[1])+"\n\nDescription : \n\t" + groupDesc);
         while (true) {
-            System.out.print("\n1. Add Expense\n2. View Expenses\n3. View Members\n4. Add Member\n5. Leave Group\n6. Go Back\n\nChoose an option : ");
+            System.out.print("\n1. Add Expense\n2. View Miscellaneous\n3. View Expenses\n4. View Members\n5. Add Member\n6. Leave Group\n7. Go Back\n\nChoose an option : ");
             int op = scn.nextInt();
             if (op == 1) {
                 List<String> share_lst = new ArrayList<>();
@@ -178,12 +212,70 @@ class Group {
                         username = scn.nextLine();
                         if(member_map.containsKey(username)) share_lst.add(username);
                         else System.out.println("\nUser not found in the Group !!");
-                    }else flag = false;
+                    }else if(ch.equals("n")) flag = false;
                 }
                 addExpense(expenseName, amount, user, share_lst);
-
             }
+
             else if(op==2){
+                boolean run = true;
+                while(run) {
+                    System.out.println("\n---------- Group Miscellaneous ----------");
+                    if (payment_map.size() > 0) {
+                        List<String> lst = new ArrayList<>(payment_map.keySet());
+                        System.out.println("\nTo Receive :");
+                        String[] arr;
+                        boolean flag = false;
+                        for (String str : lst) {
+                            arr = str.split("-");
+                            if (arr[1].equals(user.name)) {
+                                if (payment_map.get(str).amt > 0) {
+                                    System.out.println(arr[0] + " : +" + payment_map.get(str).amt);
+                                    flag = true;
+                                }
+                            }
+                        }
+                        if (!flag) System.out.println("-----");
+
+                        System.out.println("\nTo Settle :");
+                        flag = false;
+                        for (String str : lst) {
+                            arr = str.split("-");
+                            if (arr[0].equals(user.name)) {
+                                if (payment_map.get(str).amt > 0) {
+                                    System.out.println(arr[1] + " : -" + payment_map.get(str).amt);
+                                    flag = true;
+                                }
+                            }
+                        }
+
+                        if (flag) {
+                            System.out.println("\n1. Settle\n2. Go Back\n\nChoose an Option : ");
+                            int ch = new Scanner(System.in).nextInt();
+                            scn.nextLine();
+                            if (ch == 1) {
+                                System.out.println("\nEnter Beneficiary Name : ");
+                                String name = scn.nextLine();
+                                String tom_ben_id = user.name + "-" + name;
+                                if (payment_map.containsKey(tom_ben_id)) {
+                                    payment_map.get(tom_ben_id).amt = 0.0;
+                                    System.out.println("\nSettled to " + name + " !!");
+                                } else System.out.println("\nNothing to Settle !!");
+
+                            }else run = false;
+                        } else {
+                            System.out.println("-----");
+                            run = false;
+                        }
+
+                    } else {
+                        System.out.println("\nNo Miscellaneous Yet !!");
+                        run = false;
+                    }
+                }
+            }
+
+            else if(op==3){
                 boolean flag = true;
                 while(flag) {
                     System.out.println("\n---------- Group Expenses ----------");
@@ -201,13 +293,13 @@ class Group {
                     }
                 }
             }
-            else if (op == 3) {
+            else if (op == 4) {
                 boolean flag = true;
                 while (flag) {
                     flag = viewMembers();
                 }
             }
-            else if(op==4){
+            else if(op==5){
                 System.out.println("\n---------- Add Member ----------");
                 scn.nextLine();
                 System.out.print("Name : ");
@@ -224,11 +316,22 @@ class Group {
                     System.out.println("\nUser does not exist !!");
                 }
             }
-            else if (op == 5) {
-                member_map.remove((user.name + "/" + user.mail));
-                user.group_map.remove(groupID);
-                if(member_map.size()==0) SplitWise.group_map.remove(groupID);
-                System.out.println("\n You Left the Group !!");
+            else if (op == 6) {
+                String[] arr;
+                boolean flag = true;
+                for(String str:payment_map.keySet()){
+                    arr = str.split("-");
+                    if(arr[0].equals(user.name)||arr[1].equals(user.name)){
+                        flag = false;
+                        break;
+                    }
+                }
+                if(flag) {
+                    member_map.remove((user.name + "/" + user.mail));
+                    user.group_map.remove(groupID);
+                    if (member_map.size() == 0) SplitWise.group_map.remove(groupID);
+                    System.out.println("\n You Left the Group !!");
+                }else System.out.println("\nExpense Uncleared !! Cannot Leave the Group!!");
                 break;
             } else break;
         }
@@ -242,7 +345,7 @@ class Group {
         }
     }
 
-    public void removeExpense(String expenseName,User user, User paidBy) {
+    void removeExpense(String expenseName,User user, User paidBy) {
         if(user.equals(paidBy)){
             expense_map.remove(expenseName);
             System.out.printf("\n'%s' removed successfully !!\n",expenseName);
@@ -264,6 +367,7 @@ public class SplitWise {
     }
 
     static String userSignUp() {
+
         System.out.println("\n---------- User SignUp ----------");
         System.out.print("Name [at least 3 characters]: ");
         String name = scn.nextLine();
@@ -274,8 +378,8 @@ public class SplitWise {
                 System.out.println("\nUsername Already Taken !!");
                 return "null";
             }
-
-            user_map.put(name, new User(name, mail));
+            User user = new User(name,mail);
+            user_map.put(name, user);
             System.out.println("\nRegistration Success !!\nWelcome, " + name);
             return name;
         }else System.out.println("Username or Email Invalid !!");
@@ -300,12 +404,13 @@ public class SplitWise {
                 System.out.println("\nInvalid Credentials!!");
                 return askFirst();
             }
-        } else if (op == 2) return userSignUp();
+        }
+        else if (op == 2) return userSignUp();
+
         else return "exit";
     }
 
     public static void main(String[] args) {
-
         String cur_login = "";
 
         while (true) {
@@ -314,7 +419,8 @@ public class SplitWise {
             if (cur_login.equals("exit")) {
                 System.out.println("\nShutting the System Down!!");
                 break;
-            } else if (!cur_login.equals("null")) {
+            }
+            else if (!cur_login.equals("null")) {
                 boolean flag = true;
                 while (flag) {
                     System.out.println("\n---------- User Portal ----------");
